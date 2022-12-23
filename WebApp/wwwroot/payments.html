@@ -1,0 +1,272 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Платежи</title>
+    <link href="lib/bootstrap/dist/css/bootstrap.css" rel="stylesheet" />
+    <script src="lib/jquery/dist/jquery.js"></script>
+    <link href="lib/jquery-ui/themes/base/jquery-ui.min.css" rel="stylesheet" />
+    <script src="lib/jquery-ui/jquery-ui.js"></script>
+    <script src="lib/jquery-ui/ui/i18n/datepicker-ru.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>Список платежей</h2>
+        <form name="paymentForm">
+            <label for="paymentId" id="CRUD" name="CRUD">Добавить:</label>
+            <input type="hidden" id="paymentId" name="paymentId" value=0 />
+            <div class="form-group">
+                <label Добавить>Назначение платежа:</label>
+                <select id="purposeId" name="purposeId"></select>
+            </div>
+            <div class="form-group">
+                <label Добавить>Слушатель:</label>
+                <select id="listenerId" name="listenerId"></select>
+            </div>
+            <div>
+                <a id="filter" class="btn btn-sm btn-primary">Загрузить</a>
+            </div>
+            <div class="form-group">
+                <label for="amount">Сумма</label>
+                <input class="form-control" name="amount" id="amount" />
+            </div>
+            <div class="form-group">
+                <label for="date">Дата</label>
+                <input class="form-control" name="date" id="date" />
+            </div>
+            <div class="panel-body">
+                <button type="submit" class="btn btn-sm btn-primary">Сохранить</button>
+                <a id="reset" class="btn btn-sm btn-primary">Сбросить</a>
+            </div>
+        </form>
+
+
+        <table class="table table-condensed table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th>Код</th>
+                    <th>Назначение платежа</th>
+                    <th>Слушатель</th>
+                    <th>Сумма</th>
+                    <th>Дата</th>
+                </tr>
+            </thead>
+            <tbody id="data"></tbody>
+        </table>
+    </div>
+    <script>
+
+        function Getpayments() {
+            $.ajax({
+                url: '/api/payments',
+                type: 'GET',
+                contentType: "application/json",
+                success: function (payments) {
+                    var rows = "";
+                    $.each(payments, function (index, payment) {
+                        // добавляем полученные элементы в таблицу
+                        rows += row(payment);
+                    })
+                    $("table tbody#data").append(rows);
+                }
+            });
+        }
+
+        function GetFilteredpayments() {
+            var form = document.forms["paymentForm"];
+            var purposeId = form.elements["purposeId"].selectedIndex;
+            var listenerId = form.elements["listenerId"].selectedIndex;
+            $.ajax({
+                url: '/api/payments/filteredpayments?listenerId=' + listenerId + '&purposeId=' + purposeId,
+                type: 'GET',
+                contentType: "application/json",
+                success: function (payments) {
+                    var rows = "";
+                    $("table tbody#data").html("");
+                    $.each(payments, function (index, payment) {
+                        // добавляем полученные элементы в таблицу
+                        rows += row(payment);
+                    })
+                    $("table tbody#data").append(rows);
+                }
+            });
+        }
+
+        function Getpayment(paymentId) {
+            $.ajax({
+                url: '/api/payments/' + paymentId,
+                type: 'GET',
+                contentType: "application/json",
+                success: function (payment) {
+                    var form = document.forms["paymentForm"];
+                    form.elements["paymentId"].value = payment.id;
+                    form.elements["purposeId"].selectedIndex = payment.purposeId;
+                    form.elements["listenerId"].selectedIndex = payment.listenerId;
+                    form.elements["date"].value = payment.date.substring(0, 10);
+                    form.elements["amount"].value = payment.amount;
+                }
+            });
+        }
+
+        function Createpayment(purposeId, listenerId, date, amount) {
+            $.ajax({
+                url: "api/payments",
+                contentType: "application/json",
+                method: "POST",
+                data: JSON.stringify({
+                    purposeId: purposeId,
+                    listenerId: listenerId,
+                    amount: parseFloat(amount),
+                    date: date
+                }),
+                success: function (payment) {
+                    reset();
+                    var form = document.forms["paymentForm"];
+                    payment.purposeName = form.elements["purposeId"].options[purposeId].text;
+                    payment.listenerFIO = form.elements["listenerId"].options[listenerId].text;
+                    $("table tbody#data").append(row(payment));
+                }
+            })
+        }
+
+        function Editpayment(paymentId, purposeId, listenerId, date, amount) {
+            $.ajax({
+                url: "api/payments",
+                contentType: "application/json",
+                method: "PUT",
+                data: JSON.stringify({
+                    id: parseInt(paymentId),
+                    purposeId: purposeId,
+                    listenerId: listenerId,
+                    amount: parseFloat(amount),
+                    date: date
+                }),
+                success: function (payment) {
+                    reset();
+                    var form = document.forms["paymentForm"];
+                    payment.purposeName = form.elements["purposeId"].options[purposeId].text;
+                    payment.listenerFIO = form.elements["listenerId"].options[listenerId].text;
+                    $("tr[data-rowid='" + payment.id + "']").replaceWith(row(payment));
+                }
+            })
+        }
+
+        function reset() {
+            var form = document.forms["paymentForm"];
+            form.reset();
+            form.elements["paymentId"].value = 0;
+            $("#typeCRUD").html("Добавить:");
+        }
+
+
+        function Deletepayment(paymentId) {
+            $.ajax({
+                url: "api/payments/" + paymentId,
+                contentType: "application/json",
+                method: "DELETE",
+                success: function (payment) {
+                    $("tr[data-rowid='" + payment.id + "']").remove();
+                }
+            })
+        }
+        // создание строки для таблицы
+        var row = function (payment) {
+            return "<tr data-rowid='" + payment.id + "'><td>" + payment.id + "</td>" +
+                "<td>" + payment.purposeName + "</td>" +
+                "<td>" + payment.listenerFIO + "</td>" +
+                "<td>" + payment.amount + "</td>" +
+                "<td>" + payment.date.substring(0, 10) + "</td>" +
+                "<td><a class='editLink' data-id='" + payment.id + "'>Изменить</a> | " +
+                "<a class='removeLink' data-id='" + payment.id + "'>Удалить</a></td></tr>";
+        }
+
+        function Getpurposes() {
+            var listItems = "";
+            $.ajax({
+                url: '/api/payments/purposes',
+                type: 'GET',
+                contentType: "application/json",
+                success: function (purposes) {
+                    listItems = listItems + "<option value=0 selected>(выбор)</option>";
+                    $.each(purposes, function (index, purpose) {
+                        listItems = listItems + "<option value='" + purpose.id + "'>" + purpose.purposeName + "</option>";
+                    });
+                    $("#purposeId").html(listItems);
+                }
+            });
+        }
+
+        function Getlisteners() {
+            var listItems = "";
+            $.ajax({
+                url: '/api/payments/listeners',
+                type: 'GET',
+                contentType: "application/json",
+                success: function (listeners) {
+                    listItems = listItems + "<option value=0 selected>(выбор)</option>";
+                    $.each(listeners, function (index, listener) {
+                        listItems = listItems + "<option value='" + listener.id + "'>" + listener.surname + " " + listener.firstName + " " + listener.patronymic + "</option>";
+                    });
+                    $("#listenerId").html(listItems);
+                }
+            });
+        }
+
+        // сброс значений формы
+        $("#reset").click(function (e) {
+            e.preventDefault();
+            reset();
+        })
+
+
+        // фильтрация
+        $("#filter").click(function (e) {
+            GetFilteredpayments();
+        })
+
+        // отправка формы
+        $("form").submit(function (e) {
+
+            e.preventDefault();
+            var paymentId = this.elements["paymentId"].value;
+            var purposeId = this.elements["purposeId"].selectedIndex;
+            var listenerId = this.elements["listenerId"].selectedIndex;
+            var amount = this.elements["amount"].value;
+            var date = this.elements["date"].value;
+            if (paymentId == 0)
+                Createpayment(purposeId, listenerId, date, amount);
+            else
+                Editpayment(paymentId, purposeId, listenerId, date, amount);
+            reset();
+        });
+
+        // нажатие на ссылку Изменить
+        $("body").on("click", ".editLink", function () {
+            var id = $(this).data("id");
+            $("#typeCRUD").html("Изменить:");
+            Getpayment(id);
+        })
+        // нажатие на ссылку Удалить
+        $("body").on("click", ".removeLink", function () {
+            var id = $(this).data("id");
+            Deletepayment(id);
+            reset();
+        })
+
+
+        // загрузка данных для таблицы и ее формирование
+
+        Getpayments();
+        Getpurposes();
+        Getlisteners();
+        GetRecyclableTypes();
+        
+
+        //ввод даты с использованием специального окна
+        $(document).ready(function () {
+            $("#date").datepicker({ dateFormat: "yy-mm-dd" });
+        });
+    </script>
+</body>
+</html>
